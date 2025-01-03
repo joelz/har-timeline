@@ -306,7 +306,9 @@
             drawTimeline(filteredData)
         };
 
-        statsDiv.innerHTML = `<h3>按类型统计(共 ${processedData.length} 个)</h3>` +
+        const totalTime = calculateTotalDuration(processedData)
+
+        statsDiv.innerHTML = `<h3>按类型统计(共 ${processedData.length} 个, 耗时 ${ Math.round(totalTime)} 毫秒 )</h3>` +
             Object.entries(stats)
                 .map(([type, count]) => `
                     <p>
@@ -319,6 +321,23 @@
                             <span style="background-color: ${typeColors[type]}">${type}</span>: ${count}个请求
                         </label>
                     </p>`).join('');
+    }
+
+    // 计算所有请求的总耗时
+    function calculateTotalDuration(processedData) {
+        if (!processedData || processedData.length === 0) {
+            return 0;
+        }
+
+        // 找出最早的开始时间和最晚的结束时间
+        const startTimes = processedData.map(entry => entry.times[0].starting_time);
+        const endTimes = processedData.map(entry => entry.times[0].ending_time);
+        
+        const minStartTime = Math.min(...startTimes);
+        const maxEndTime = Math.max(...endTimes);
+
+        // 计算总耗时（毫秒）
+        return maxEndTime - minStartTime;
     }
     // 页面加载完成提示
     console.log('网站已加载');
