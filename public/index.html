@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Express 网站</title>
+    <title>HAR Timeline</title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .drop-zone {
@@ -50,20 +50,18 @@
 <body>
     <header>
         <nav>
-            <a href="/">首页</a>
+            <a href="/">HAR Timline Viewer</a>
         </nav>
     </header>
 
     <main>
         <div class="container">
-            <h1>欢迎来到 Express 网站</h1>
-            <p>这是一个静态 HTML 页面。</p>
 
             <div class="upload-section">
                 <div class="drop-zone" id="dropZone">
                     <p>将 HAR 文件拖放到此处</p>
                     <p>或</p>
-                    <input type="file" id="harFileInput" accept=".har" />
+                    <input type="file" id="harFileInput" accept=".har" onchange="handleFileUpload()" />
                 </div>
             </div>
 
@@ -74,7 +72,7 @@
     </main>
 
     <footer>
-        <p>&copy; 2024 Express网站</p>
+        <p>&copy; 2024 </p>
     </footer>
 
     <script src="https://d3js.org/d3.v3.min.js"></script>
@@ -82,6 +80,24 @@
 </body>
 
 </html>
+<script>
+    const typeColors = {
+        'arms': '#FF9800', // orange
+        'image': '#2196F3', // blue 
+        'tracking': '#9C27B0', // purple
+        'api': '#4CAF50', // green
+        'unknown': '#757575' // gray
+    };
+
+    // 原始数据
+    let processedData = [];
+
+    // 显示统计信息
+    // 如果全局变量不存在则初始化
+    if (!window.selectedTypes) {
+        window.selectedTypes = [];
+    }
+</script>
 <script>
     // 文件上传处理函数
     function handleFileUpload() {
@@ -104,38 +120,11 @@
             try {
                 const content = e.target.result;
                 const harData = JSON.parse(content);
-                const processedData = processHarEntries(harData);
+                processedData = processHarEntries(harData);
                 // console.log(processedData);
-
-                // 清空现有时间轴
-                d3.select("#timeline").html("");
-
-                // 创建新的时间轴
-                const chart = d3.timeline()
-                    .stack()
-                    .margin({ left: 100, right: 30, top: 20, bottom: 30 })
-                    .tickFormat({
-                        format: d3.time.format("%H:%M:%S"),
-                        tickTime: d3.time.seconds,
-                        tickInterval: 5,
-                        tickSize: 6
-                    })
-                    .hover((d, i, datum) => {
-                        //console.log(d, datum);
-                    })
-                    .click(function (d, i, datum) {
-                        // d is the current rendering object
-                        // i is the index during d3 rendering
-                        // datum is the data object
-                        console.log(datum)
-                    });;
-
-                const svg = d3.select("#timeline")
-                    .append("svg")
-                    .attr("width", document.querySelector('.timeline-container').offsetWidth)
-                    .datum(processedData)
-                    .call(chart);
-
+                drawTimeline(processedData);
+                // 显示统计信息
+                showStatistics(processedData);
             } catch (error) {
                 console.error('读取文件时发生错误:', error);
                 alert('读取文件时发生错误');
@@ -184,11 +173,145 @@
                 label: entry.request.url,
                 starting_time: new Date(entry.startedDateTime).getTime(),
                 ending_time: new Date(entry.startedDateTime).getTime() + entry.time,
-                color: entry.response.status < 400 ? "#28a745" : "#dc3545" // 成功为绿色，失败为红色
+                color: typeColors[getReqType(entry.request.url)],
             }]
         })).reverse();
     }
 
+    function drawTimeline(processedData) {
+        // 清空现有时间轴
+        d3.select("#timeline").html("");
+
+        // 创建新的时间轴
+        const chart = d3.timeline()
+            .stack()
+            .margin({ left: 100, right: 30, top: 20, bottom: 30 })
+            .itemHeight(40)      // 增加每个项目的高度
+            .itemMargin(15)      // 增加项目之间的间距
+            .tickFormat({
+                format: d3.time.format("%H:%M:%S"),
+                tickTime: d3.time.seconds,
+                tickInterval: 5,
+                tickSize: 6
+            })
+            .hover((d, i, datum) => {
+                // 添加鼠标悬停样式
+                d3.select(event.target)
+                    .style('cursor', 'pointer')
+                    .style('opacity', 0.8);
+            })
+            .click(function (d, i, datum) {
+                // console.log(d, datum);
+                // d is the current rendering object
+                // i is the index during d3 rendering
+                // datum is the data object
+                // 创建弹窗内容
+                const modalContent = `
+                    <div class="modal" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                        background: white; padding: 20px; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+                        z-index: 1000; max-width: 500px; width: 90%;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                            <h3 style="margin: 0;">请求详情</h3>
+                            <button onclick="this.closest('.modal-container').remove()" 
+                                style="background: none; border: none; cursor: pointer; font-size: 20px;">&times;</button>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <strong>URL:</strong> <div style="word-break: break-all;">${datum.label}</div>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <strong>类型:</strong> ${datum.type}
+                        </div>
+                        <div>
+                            <strong>耗时:</strong> ${(datum.times[0].ending_time - datum.times[0].starting_time).toFixed(2)}ms
+                        </div>
+                    </div>
+                `;
+
+                // 创建遮罩层和弹窗容器
+                const modalContainer = document.createElement('div');
+                modalContainer.className = 'modal-container';
+                modalContainer.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0,0,0,0.5);
+                    z-index: 999;
+                `;
+                modalContainer.innerHTML = modalContent;
+
+                // 添加点击遮罩层关闭弹窗的功能
+                modalContainer.addEventListener('click', (e) => {
+                    if (e.target === modalContainer) {
+                        modalContainer.remove();
+                    }
+                });
+
+                // 将弹窗添加到页面
+                document.body.appendChild(modalContainer);
+                console.log(datum)
+            });
+
+        const svg = d3.select("#timeline")
+            .append("svg")
+            .attr("width", document.querySelector('.timeline-container').offsetWidth)
+            .attr("height", processedData.length * 55 + 50)  // 动态计算合适的高度
+            .datum(processedData)
+            .call(chart);
+
+        // 添加可点击区域的样式
+        svg.selectAll('.timeline-item')
+            .style('cursor', 'pointer')
+            .style('transition', 'opacity 0.2s');
+    }
+
+    function showStatistics(processedData) {
+        // 统计各类型请求数量
+        const stats = processedData.reduce((acc, curr) => {
+            acc[curr.type] = (acc[curr.type] || 0) + 1;
+            return acc;
+        }, {});
+
+        // 创建或更新统计信息显示区域
+        let statsDiv = document.getElementById('request-stats');
+        if (!statsDiv) {
+            statsDiv = document.createElement('div');
+            statsDiv.id = 'request-stats';
+            statsDiv.style.cssText = 'margin: 20px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px;';
+            document.getElementById('timeline').insertAdjacentElement('beforebegin', statsDiv);
+        }
+
+        // 定义处理复选框变化的函数
+        window.handleTypeCheckboxChange = function (checkbox) {
+            if (checkbox.checked) {
+                window.selectedTypes.push(checkbox.value);
+            } else {
+                window.selectedTypes = window.selectedTypes.filter(t => t !== checkbox.value);
+            }
+
+            // 过滤并刷新数据
+            const filteredData = window.selectedTypes.length > 0
+                ? processedData.filter(item => window.selectedTypes.includes(item.type))
+                : processedData;
+
+            drawTimeline(filteredData)
+        };
+
+        statsDiv.innerHTML = `<h3>请求类型统计(共 ${processedData.length} 个)</h3>` +
+            Object.entries(stats)
+                .map(([type, count]) => `
+                    <p>
+                        <input type="checkbox" 
+                               id="checkbox-${type}" 
+                               value="${type}"
+                               ${window.selectedTypes.includes(type) ? 'checked' : ''}
+                               onchange="handleTypeCheckboxChange(this)">
+                        <label for="checkbox-${type}">
+                            <span style="background-color: ${typeColors[type]}">${type}</span>: ${count}个请求
+                        </label>
+                    </p>`).join('');
+    }
     // 页面加载完成提示
     console.log('网站已加载');
 
