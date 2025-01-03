@@ -12,7 +12,7 @@
             height: 200px;
             border: 2px dashed #ccc;
             border-radius: 4px;
-            margin: 20px auto;
+            margin: 10px auto;
             padding: 20px;
             text-align: center;
             transition: border 0.3s ease;
@@ -31,7 +31,7 @@
         .timeline-container {
             margin: 20px auto;
             width: 100%;
-            max-width: 1000px;
+            /* max-width: 1000px; */
         }
 
         .axis path,
@@ -43,6 +43,14 @@
 
         .axis text {
             font-size: 12px;
+        }
+
+        #request-stats {
+            flex: 1;
+            margin: 10px;
+            padding: 10px; 
+            border: 1px dashed #ddd; 
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -63,6 +71,7 @@
                     <p>或</p>
                     <input type="file" id="harFileInput" accept=".har" onchange="handleFileUpload()" />
                 </div>
+                <div id="request-stats"></div>
             </div>
 
             <div class="timeline-container">
@@ -76,7 +85,7 @@
     </footer>
 
     <script src="https://d3js.org/d3.v3.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/jiahuang/d3-timeline/src/d3-timeline.js"></script>
+    <script src="./js/d3-timeline.js"></script>
 </body>
 
 </html>
@@ -187,7 +196,7 @@
             .stack()
             .margin({ left: 100, right: 30, top: 20, bottom: 30 })
             .itemHeight(40)      // 增加每个项目的高度
-            .itemMargin(15)      // 增加项目之间的间距
+            .itemMargin(12)      // 增加项目之间的间距
             .tickFormat({
                 format: d3.time.format("%H:%M:%S"),
                 tickTime: d3.time.seconds,
@@ -275,12 +284,11 @@
 
         // 创建或更新统计信息显示区域
         let statsDiv = document.getElementById('request-stats');
-        if (!statsDiv) {
-            statsDiv = document.createElement('div');
-            statsDiv.id = 'request-stats';
-            statsDiv.style.cssText = 'margin: 20px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px;';
-            document.getElementById('timeline').insertAdjacentElement('beforebegin', statsDiv);
-        }
+        // if (!statsDiv) {
+        //     statsDiv = document.createElement('div');
+        //     statsDiv.id = 'request-stats';
+        //     document.getElementById('timeline').insertAdjacentElement('beforebegin', statsDiv);
+        // }
 
         // 定义处理复选框变化的函数
         window.handleTypeCheckboxChange = function (checkbox) {
@@ -298,7 +306,7 @@
             drawTimeline(filteredData)
         };
 
-        statsDiv.innerHTML = `<h3>请求类型统计(共 ${processedData.length} 个)</h3>` +
+        statsDiv.innerHTML = `<h3>按类型统计(共 ${processedData.length} 个)</h3>` +
             Object.entries(stats)
                 .map(([type, count]) => `
                     <p>
