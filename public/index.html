@@ -1,11 +1,52 @@
 <!DOCTYPE html>
 <html lang="zh">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Express 网站</title>
     <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .drop-zone {
+            width: 300px;
+            height: 200px;
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            margin: 20px auto;
+            padding: 20px;
+            text-align: center;
+            transition: border 0.3s ease;
+        }
+
+        .drop-zone.dragover {
+            border-color: #000;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .drop-zone p {
+            margin: 0;
+            padding: 10px;
+        }
+
+        .timeline-container {
+            margin: 20px auto;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        .axis path,
+        .axis line {
+            fill: none;
+            stroke: #000;
+            shape-rendering: crispEdges;
+        }
+
+        .axis text {
+            font-size: 12px;
+        }
+    </style>
 </head>
+
 <body>
     <header>
         <nav>
@@ -17,6 +58,18 @@
         <div class="container">
             <h1>欢迎来到 Express 网站</h1>
             <p>这是一个静态 HTML 页面。</p>
+
+            <div class="upload-section">
+                <div class="drop-zone" id="dropZone">
+                    <p>将 HAR 文件拖放到此处</p>
+                    <p>或</p>
+                    <input type="file" id="harFileInput" accept=".har" />
+                </div>
+            </div>
+
+            <div class="timeline-container">
+                <div id="timeline"></div>
+            </div>
         </div>
     </main>
 
@@ -24,6 +77,167 @@
         <p>&copy; 2024 Express网站</p>
     </footer>
 
-    <script src="/js/main.js"></script>
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/jiahuang/d3-timeline/src/d3-timeline.js"></script>
 </body>
-</html> 
+
+</html>
+<script>
+    // 文件上传处理函数
+    function handleFileUpload() {
+        const fileInput = document.getElementById('harFileInput');
+        const file = fileInput.files[0];
+
+        if (!file) {
+            alert('请先选择一个 HAR 文件');
+            return;
+        }
+
+        if (!file.name.endsWith('.har')) {
+            alert('请选择 .har 格式的文件');
+            return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = function (e) {
+            try {
+                const content = e.target.result;
+                const harData = JSON.parse(content);
+                const processedData = processHarEntries(harData);
+                // console.log(processedData);
+
+                // 清空现有时间轴
+                d3.select("#timeline").html("");
+
+                // 创建新的时间轴
+                const chart = d3.timeline()
+                    .stack()
+                    .margin({ left: 100, right: 30, top: 20, bottom: 30 })
+                    .tickFormat({
+                        format: d3.time.format("%H:%M:%S"),
+                        tickTime: d3.time.seconds,
+                        tickInterval: 5,
+                        tickSize: 6
+                    })
+                    .hover((d, i, datum) => {
+                        //console.log(d, datum);
+                    })
+                    .click(function (d, i, datum) {
+                        // d is the current rendering object
+                        // i is the index during d3 rendering
+                        // datum is the data object
+                        console.log(datum)
+                    });;
+
+                const svg = d3.select("#timeline")
+                    .append("svg")
+                    .attr("width", document.querySelector('.timeline-container').offsetWidth)
+                    .datum(processedData)
+                    .call(chart);
+
+            } catch (error) {
+                console.error('读取文件时发生错误:', error);
+                alert('读取文件时发生错误');
+            }
+        };
+
+        reader.onerror = function (error) {
+            console.error('文件读取错误:', error);
+            alert('文件读取失败');
+        };
+
+        // 以文本形式读取文件
+        reader.readAsText(file, 'UTF-8');
+    }
+
+    const getReqType = (url) => {
+        //写一个函数，将url 分类：域名为 arms-retcode.aliyuncs.com 分类为 arms，域名为 static-le.kerryprops.com.cn 或者 static-le.kerryprops.com.cn 分类为 image， 域名为 t.kerryplus.com 分类为 tracking，域名为apim.kerryplus.com分类为 api
+        // 提取域名
+        const domain = new URL(url).hostname;
+
+        // 分类规则
+        if (domain === 'arms-retcode.aliyuncs.com') {
+            return 'arms';
+        } else if (domain === 'static-le.kerryprops.com.cn' || domain === 'static.kerryprops.com.cn') {
+            return 'image';
+        } else if (domain === 't.kerryplus.com') {
+            return 'tracking';
+        } else if (domain === 'apim.kerryplus.com') {
+            return 'api';
+        } else {
+            return 'unknown';
+        }
+    };
+
+    // 新增函数：处理 HAR 条目
+    function processHarEntries(harData) {
+        if (!harData.log || !harData.log.entries) {
+            return [];
+        }
+
+        // 将每个请求映射为单独的一行
+        return harData.log.entries.map(entry => ({
+            type: getReqType(entry.request.url),
+            label: entry.request.url,  // 使用完整 URL 作为标签
+            times: [{
+                label: entry.request.url,
+                starting_time: new Date(entry.startedDateTime).getTime(),
+                ending_time: new Date(entry.startedDateTime).getTime() + entry.time,
+                color: entry.response.status < 400 ? "#28a745" : "#dc3545" // 成功为绿色，失败为红色
+            }]
+        })).reverse();
+    }
+
+    // 页面加载完成提示
+    console.log('网站已加载');
+
+    // 添加拖放相关的事件处理
+    document.addEventListener('DOMContentLoaded', function () {
+        const dropZone = document.getElementById('dropZone');
+
+        // 阻止默认拖放行为
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        // 添加拖放视觉反馈
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        // 处理文件拖放
+        dropZone.addEventListener('drop', handleDrop, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    function highlight(e) {
+        document.getElementById('dropZone').classList.add('dragover');
+    }
+
+    function unhighlight(e) {
+        document.getElementById('dropZone').classList.remove('dragover');
+    }
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const file = dt.files[0];
+
+        // 将文件设置到 input 元素中
+        const fileInput = document.getElementById('harFileInput');
+        fileInput.files = dt.files;
+
+        // 处理文件上传
+        handleFileUpload();
+    }
+
+</script>

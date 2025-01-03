@@ -34,4 +34,29 @@ footer {
     position: fixed;
     bottom: 0;
     width: 100%;
+}
+
+.upload-section {
+    margin-top: 2rem;
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.upload-section input[type="file"] {
+    margin-bottom: 1rem;
+    display: block;
+}
+
+button {
+    padding: 0.5rem 1rem;
+    background-color: #333;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #444;
 } 
